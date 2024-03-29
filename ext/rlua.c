@@ -41,7 +41,7 @@ static void rlua_add_ref_finalizer(VALUE state, VALUE ref, VALUE object)
 
   VALUE mObjectSpace = rb_const_get(rb_cObject, rb_intern("ObjectSpace"));
   VALUE proc = rb_proc_new(rlua_finalize_ref, state);
-  rb_funcall(mObjectSpace, rb_intern("define_finalizer"), 2, object, proc);
+  // rb_funcall(mObjectSpace, rb_intern("define_finalizer"), 2, object, proc);
 }
 
 static VALUE rlua_get_var(lua_State *state)
