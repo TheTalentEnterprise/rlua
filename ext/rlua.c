@@ -38,8 +38,6 @@ static VALUE rlua_finalize_ref(VALUE id, VALUE rbState)
 static void rlua_add_ref_finalizer(VALUE state, VALUE ref, VALUE object)
 {
   rb_hash_aset(rb_iv_get(state, "@refs"), rb_obj_id(object), ref);
-
-  VALUE mObjectSpace = rb_const_get(rb_cObject, rb_intern("ObjectSpace"));
   VALUE proc = rb_proc_new(rlua_finalize_ref, state);
   rb_define_finalizer(object, proc);
 }
