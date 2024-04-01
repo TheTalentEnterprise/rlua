@@ -1262,7 +1262,7 @@ void Init_rlua()
   rb_define_method(cLuaTable, "==", rbLua_equal, 1);
   rb_define_method(cLuaTable, "method_missing", rbLuaTable_method_missing, -1);
 
-  mExceptions =rb_define_module_under(mLua, "Exceptions");
+  mExceptions = rb_define_module_under(mLua, "Exceptions");
   cBaseException = rb_define_class_under(mExceptions, "Base", rb_eStandardError);
   cTypeException = rb_define_class_under(mExceptions, "TypeError", cBaseException);
   cNoMemException = rb_define_class_under(mExceptions, "NoMemError", cBaseException);
