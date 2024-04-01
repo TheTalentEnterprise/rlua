@@ -5,7 +5,7 @@
 #include <ctype.h>
 #include <ruby/encoding.h>
 
-VALUE mLua, cLuaState, cLuaMultret, cLuaFunction, cLuaTable;
+VALUE mLua, cLuaState, cLuaMultret, cLuaFunction, cLuaTable, mExceptions, cBaseException, cTypeException, cNoMemException, cRunTimeException, cSyntaxException;
 
 static VALUE rlua_makeref(lua_State* state)
 {
@@ -38,10 +38,8 @@ static VALUE rlua_finalize_ref(VALUE id, VALUE rbState)
 static void rlua_add_ref_finalizer(VALUE state, VALUE ref, VALUE object)
 {
   rb_hash_aset(rb_iv_get(state, "@refs"), rb_obj_id(object), ref);
-
-  VALUE mObjectSpace = rb_const_get(rb_cObject, rb_intern("ObjectSpace"));
   VALUE proc = rb_proc_new(rlua_finalize_ref, state);
-  rb_funcall(mObjectSpace, rb_intern("define_finalizer"), 2, object, proc);
+  rb_define_finalizer(object, proc);
 }
 
 static VALUE rlua_get_var(lua_State *state)
@@ -163,7 +161,7 @@ static void rlua_push_var(lua_State *state, VALUE value)
 
         rlua_push_var(state, rb_funcall(cLuaFunction, rb_intern("new"), 2, rbLuaState, value));
       } else {
-        rb_raise(rb_eTypeError, "wrong argument type %s", rb_obj_classname(value));
+        rb_raise(cTypeException, "wrong argument type %s", rb_obj_classname(value));
       }
   }
 }
@@ -197,9 +195,9 @@ static void rlua_load_string(lua_State* state, VALUE code, VALUE chunkname)
     VALUE error = rb_str_new(errstr, errlen);
     lua_pop(state, 1);
     if(retval == LUA_ERRMEM)
-      rb_exc_raise(rb_exc_new3(rb_eNoMemError, error));
+      rb_exc_raise(rb_exc_new3(cNoMemException, error));
     else if(retval == LUA_ERRSYNTAX)
-      rb_exc_raise(rb_exc_new3(rb_eSyntaxError, error));
+      rb_exc_raise(rb_exc_new3(cSyntaxException, error));
   }
 }
 
@@ -217,9 +215,9 @@ static VALUE rlua_pcall(lua_State* state, int argc)
     lua_pop(state, 1);
 
     if(retval == LUA_ERRRUN)
-      rb_exc_raise(rb_exc_new3(rb_eRuntimeError, error));
+      rb_exc_raise(rb_exc_new3(cRunTimeException, error));
     else if(retval == LUA_ERRSYNTAX)
-      rb_exc_raise(rb_exc_new3(rb_eSyntaxError, error));
+      rb_exc_raise(rb_exc_new3(cSyntaxException, error));
     else
       rb_fatal("unknown lua_pcall return value");
   } else {
@@ -252,7 +250,7 @@ static VALUE rbLuaTable_initialize(int argc, VALUE* argv, VALUE self)
 
   VALUE stateSource = rb_obj_class(rbLuaState);
   if(stateSource != cLuaState && stateSource != cLuaTable && stateSource != cLuaFunction)
-    rb_raise(rb_eTypeError, "wrong argument type %s (expected Lua::State, Lua::Table or Lua::Function)",
+    rb_raise(cTypeException, "wrong argument type %s (expected Lua::State, Lua::Table or Lua::Function)",
            rb_obj_classname(rbLuaState));
 
   VALUE rbState = rb_iv_get(rbLuaState, "@state");
@@ -266,7 +264,7 @@ static VALUE rbLuaTable_initialize(int argc, VALUE* argv, VALUE self)
     ref = rlua_makeref(state);
     lua_pop(state, 1);
   } else if(TYPE(ref) != T_FIXNUM) {
-    rb_raise(rb_eTypeError, "wrong argument type %s (expected nil)", rb_obj_classname(ref));
+    rb_raise(cTypeException, "wrong argument type %s (expected nil)", rb_obj_classname(ref));
   }
 
   rlua_add_ref_finalizer(rbState, ref, self);
@@ -469,7 +467,7 @@ static VALUE rbLuaTable_method_missing(int argc, VALUE* argv, VALUE self)
       return rb_call_super(argc, argv);
     } else if(rb_obj_class(value) != cLuaFunction) {
       if(is_method)
-        rb_raise(rb_eTypeError, "%s is not a Lua::Function", RSTRING_PTR(name));
+        rb_raise(cTypeException, "%s is not a Lua::Function", RSTRING_PTR(name));
       return value;
     } else {
       if(is_method)
@@ -523,7 +521,7 @@ static VALUE rbLuaFunction_initialize(int argc, VALUE* argv, VALUE self)
   rb_scan_args(argc, argv, "11", &rbLuaState, &func);
 
   if(rb_obj_class(rbLuaState) != cLuaState)
-    rb_raise(rb_eTypeError, "wrong argument type %s (expected Lua::State)", rb_obj_classname(rbLuaState));
+    rb_raise(cTypeException, "wrong argument type %s (expected Lua::State)", rb_obj_classname(rbLuaState));
 
   VALUE rbState = rb_iv_get(rbLuaState, "@state");
   rb_iv_set(self, "@state", rbState);
@@ -538,7 +536,7 @@ static VALUE rbLuaFunction_initialize(int argc, VALUE* argv, VALUE self)
   else if(rb_respond_to(func, rb_intern("call")))
     proc = func;
   else
-    rb_raise(rb_eTypeError, "wrong argument type %s (expected Proc)", rb_obj_classname(func));
+    rb_raise(cTypeException, "wrong argument type %s (expected Proc)", rb_obj_classname(func));
 
   if(ref == Qnil) {
     lua_pushlightuserdata(state, (void*) proc);
@@ -712,7 +710,7 @@ static VALUE rbLua_set_metatable(VALUE self, VALUE object, VALUE metatable)
   Data_Get_Struct(rb_iv_get(self, "@state"), lua_State, state);
 
   if(rb_obj_class(metatable) != cLuaTable && TYPE(metatable) != T_HASH)
-    rb_raise(rb_eTypeError, "wrong argument type %s (expected Lua::Table or Hash)", rb_obj_classname(metatable));
+    rb_raise(cTypeException, "wrong argument type %s (expected Lua::Table or Hash)", rb_obj_classname(metatable));
 
   rlua_push_var(state, object);                    // stack: |objt|...
   rlua_push_var(state, metatable);                 //        |meta|objt|...
@@ -753,7 +751,7 @@ static VALUE rbLua_get_global(VALUE self, VALUE index)
   Data_Get_Struct(rb_iv_get(self, "@state"), lua_State, state);
 
   if (TYPE(index) != T_STRING) {
-    rb_raise(rb_eTypeError, "wrong argument type %s", rb_obj_classname(index));
+    rb_raise(cTypeException, "wrong argument type %s", rb_obj_classname(index));
     return Qnil;
   }
 
@@ -775,7 +773,7 @@ static VALUE rbLua_set_global(VALUE self, VALUE index, VALUE value)
   Data_Get_Struct(rb_iv_get(self, "@state"), lua_State, state);
 
   if (TYPE(index) != T_STRING) {
-    rb_raise(rb_eTypeError, "wrong argument type %s", rb_obj_classname(index));
+    rb_raise(cTypeException, "wrong argument type %s", rb_obj_classname(index));
     return Qnil;
   }
 
@@ -855,7 +853,7 @@ static VALUE rbLua_method_missing(int argc, VALUE* argv, VALUE self)
       return rb_call_super(argc, argv);
     } else if(rb_obj_class(value) != cLuaFunction) {
       if(is_method)
-        rb_raise(rb_eTypeError, "%s is not a Lua::Function", RSTRING_PTR(name));
+        rb_raise(cTypeException, "%s is not a Lua::Function", RSTRING_PTR(name));
       return value;
     } else {
       if(is_method)
@@ -1211,6 +1209,7 @@ void Init_rlua()
   rb_define_method(cLuaState, "[]=", rbLua_set_global, 2);
   rb_define_method(cLuaState, "method_missing", rbLua_method_missing, -1);
 
+
   /*
    * An intermediate object assisting return of multiple values from Ruby.
    * See description of Lua::Function#call.
@@ -1260,4 +1259,11 @@ void Init_rlua()
   rb_define_method(cLuaTable, "[]=", rbLuaTable_set, 2);
   rb_define_method(cLuaTable, "==", rbLua_equal, 1);
   rb_define_method(cLuaTable, "method_missing", rbLuaTable_method_missing, -1);
+
+  mExceptions = rb_define_module_under(mLua, "Exceptions");
+  cBaseException = rb_define_class_under(mExceptions, "Base", rb_eStandardError);
+  cTypeException = rb_define_class_under(mExceptions, "TypeError", cBaseException);
+  cNoMemException = rb_define_class_under(mExceptions, "NoMemError", cBaseException);
+  cRunTimeException = rb_define_class_under(mExceptions, "RuntimeError", cBaseException);
+  cSyntaxException = rb_define_class_under(mExceptions, "SyntaxError", cBaseException);
 }
