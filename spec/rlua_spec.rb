@@ -167,7 +167,7 @@ describe Lua::State do
         it 'raises a runtime error' do
           expect {
             subject.__eval 'error("bleepbloop")'
-          }.to raise_error(RuntimeError, "<eval>:1: bleepbloop")
+          }.to raise_error(Lua::Exceptions::RuntimeError, "<eval>:1: bleepbloop")
         end
       end
 

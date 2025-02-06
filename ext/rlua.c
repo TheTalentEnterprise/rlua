@@ -1,7 +1,7 @@
 #include <ruby.h>
-#include <lua5.3/lua.h>
-#include <lua5.3/lauxlib.h>
-#include <lua5.3/lualib.h>
+#include <lua5.4/lua.h>
+#include <lua5.4/lauxlib.h>
+#include <lua5.4/lualib.h>
 #include <ctype.h>
 #include <ruby/encoding.h>
 
@@ -19,7 +19,7 @@ static VALUE rlua_makeref(lua_State* state)
   return ref;
 }
 
-static VALUE rlua_finalize_ref(VALUE id, VALUE rbState)
+static VALUE rlua_finalize_ref(VALUE id, VALUE rbState, int argc, const VALUE *argv, VALUE blockarg)
 {
   lua_State* state;
   Data_Get_Struct(rbState, lua_State, state);
